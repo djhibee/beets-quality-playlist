@@ -14,14 +14,16 @@ from beets.util import bytestring_path, normpath, path_as_posix, syspath
 
 
 MARKER = b"# quality-playlist: "
-LOSSLESS_FORMATS = {"FLAC", "ALAC", "WAV", "AIFF", "APE", "WavPack", "DSD"}
+LOSSLESS_FORMATS = {
+    "FLAC", "ALAC", "WAV", "WAVE", "AIFF", "APE", "WAVPACK", "DSD", "DSD STREAM FILE"
+}
 V0 = 300_000
 V2 = 225_000
 
 
 def quality(item):
     """Comparable quality: lossless, then lossy bitrate with LAME preset ranks."""
-    if item.get("format", "").upper() in {fmt.upper() for fmt in LOSSLESS_FORMATS}:
+    if item.get("format", "").upper() in LOSSLESS_FORMATS:
         return math.inf
     settings = str(item.get("encoder_settings", ""))
     preset = re.search(r"(?:-V\s*|(?:^|\s)V)([0-9])\b", settings, re.I)

@@ -81,6 +81,7 @@ not found in the library are preserved. Unknown entries are logged.
   available, an eligible lossy upgrade is used.
 * In `LOSSY` mode, lossy originals may upgrade but never downgrade. A lossless
   original may be replaced by the highest-quality matching lossy version.
+  Lossless formats include FLAC, ALAC, WAVE, AIFF, APE, WavPack, and DSD.
 * The quality ordering includes
   `CBR128 < CBR192 < V2 < V0 < CBR320 < lossless`.
   Known LAME `-V 2`/`-V 0` (or `V2`/`V0`) presets in Beets'
@@ -92,6 +93,7 @@ not found in the library are preserved. Unknown entries are logged.
 * Among candidates of the desired type, prefer higher quality when its
   distance minus the nearest candidate's distance is **less than** `max_gap`.
   A higher-quality upgrade outside that gap requires a choice.
+  The upgrade-gap rule does not apply to lossless-to-lossy replacements.
 * An unambiguous candidate is automatically accepted only when its distance
   is **less than** `strong_rec_thresh`. If omitted, this setting inherits
   Beets' `match.strong_rec_thresh`. Otherwise, the user selects a numbered

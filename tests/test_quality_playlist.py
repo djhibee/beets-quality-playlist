@@ -84,6 +84,30 @@ class QualityPlaylistTest(unittest.TestCase):
             [128_000, 192_000, V2, V0, 320_000, math.inf],
         )
 
+    def test_beets_lossless_format_names(self):
+        for name in ["FLAC", "ALAC", "WAVE", "AIFF", "APE", "WavPack", "DSD Stream File"]:
+            with self.subTest(format=name):
+                lossless = self.item(f"{name}.audio", 1_000_000, format=name)
+                self.assertEqual(quality(lossless), math.inf)
+                self.assertEqual(
+                    self.choose([(lossless, 0.001)], "LOSSY"), self.original
+                )
+                self.assertEqual(
+                    self.choose([(lossless, 0.001)], "LOSSLESS"), lossless
+                )
+                self.assertEqual(
+                    self.choose([(self.cbr, 0.001)], original=lossless), self.cbr
+                )
+
+    def test_lossless_to_lossy_prefers_highest_bitrate_without_upgrade_gap(self):
+        self.assertEqual(
+            self.choose(
+                [(self.v2, 0.001), (self.cbr, 0.03)],
+                original=self.flac, quiet=True, gap=0.005,
+            ),
+            self.cbr,
+        )
+
     def test_lossless_preferred_over_closer_lossy(self):
         self.assertEqual(
             self.choose([(self.cbr, 0.001), (self.flac, 0.03)], "LOSSLESS"),
