@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "beets-quality-playlist"
+version = "0.1.0"
+description = "Generate quality-specific playlists using local Beets similarity matches"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = [
+    "beets>=2.14.1",
+    "beets-similarity @ https://github.com/djhibee/beets-similarity/archive/8dccafa8b7f8106d1be78276194bd0fda45d1412.zip",
+]
+
+[tool.setuptools.packages.find]
+include = ["beetsplug*"]
+namespaces = true
