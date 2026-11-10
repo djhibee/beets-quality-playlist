@@ -61,7 +61,9 @@ beet qualityPlaylist --pretend -p favorites
 Quality names are case-insensitive; the default is `LOSSLESS`. `-p` accepts a
 filename or a name in `playlist.playlist_dir` (with optional `.m3u`/`.m3u8`).
 Without `-p`, all reference playlists in that directory are processed.
-`favorites.m3u` produces `favorites.quality-lossless.m3u` alongside the source.
+`favorites.m3u` produces `favorites.quality-lossless.m3u` in
+`playlist.playlist_dir`, even when the reference is elsewhere. Relative paths
+are rebased when necessary, including entries not found in the library.
 Generated files contain a marker so they never become input playlists;
 subsequent calls regenerate them. Reference files are never overwritten, and
 an unmarked file occupying the output name is rejected.

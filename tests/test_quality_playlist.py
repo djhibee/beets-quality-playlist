@@ -324,6 +324,24 @@ class QualityPlaylistTest(unittest.TestCase):
             self.lib, unittest.mock.ANY, 0.95
         )
 
+    def test_external_reference_writes_in_official_playlist_directory(self):
+        external = self.root / "external"
+        external.mkdir()
+        source = external / "outside.m3u"
+        source.write_bytes(b"../original.mp3\nunknown.mp3\n")
+        self.command("-p", str(source), "--quiet")
+        output = self.root / "outside.quality-lossless.m3u"
+        self.assertIn(b"lossless.flac\n", output.read_bytes())
+        self.assertIn(b"external/unknown.mp3\n", output.read_bytes())
+        self.assertFalse((external / output.name).exists())
+        self.assertIn(str(output), list(self.playlist.find_playlists()))
+
+    def test_cache_cannot_overwrite_source(self):
+        self.plugin.config["cache_file"] = str(self.source)
+        with self.assertRaises(ui.UserError):
+            self.command("--quiet")
+        self.assertIn(b"original.mp3\n", self.source.read_bytes())
+
 
 if __name__ == "__main__":
     unittest.main()

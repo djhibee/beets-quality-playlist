@@ -306,7 +306,13 @@ class QualityPlaylistPlugin(BeetsPlugin):
                 original = next(iter(lib.items(MatchQuery("path", path))), None)
                 if original is None:
                     self._log.warning("Not in library; preserving playlist entry: {}", syspath(path))
-                    result.append(line)
+                    if base == output_base or os.path.isabs(entry):
+                        result.append(line)
+                    else:
+                        target = os.path.relpath(path, output_base)
+                        if config["playlist"]["forward_slash"].get(bool):
+                            target = path_as_posix(target)
+                        result.append(target + b"\n")
                     continue
                 candidates = []
                 if strategy != "LOSSLESS" or quality(original) != math.inf:
@@ -342,9 +348,14 @@ class QualityPlaylistPlugin(BeetsPlugin):
         timid = opts.timid or self.config["timid"].get(bool) or config["import"]["timid"].get(bool)
         cache = ChoiceCache(self.config["cache_file"].as_filename(), lib)
         sources = self._playlists(opts.playlist)
+        directory = Path(config["playlist"]["playlist_dir"].as_filename())
         try:
             for source in sources:
-                output = source.with_name(f"{source.stem}.quality-{strategy.lower()}{source.suffix}")
+                output = directory / f"{source.stem}.quality-{strategy.lower()}{source.suffix}"
+                if Path(cache.path).resolve() in {
+                    source.resolve(), output.resolve(), Path(syspath(lib.path)).resolve()
+                }:
+                    raise ui.UserError("Choice cache must not overwrite a playlist or the library")
                 if output.exists() and not self._generated(output):
                     raise ui.UserError(f"Refusing to overwrite a reference playlist: {output}")
                 content, dirty = self._render(
