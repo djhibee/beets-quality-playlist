@@ -300,8 +300,24 @@ class QualityPlaylistTest(unittest.TestCase):
             with self.assertRaises(ui.UserError):
                 self.plugin._dependencies()
         self.plugin.config["algorithm"] = "legacy"
-        with self.assertRaises(ui.UserError):
-            self.command()
+        with patch("beets.plugins.find_plugins", return_value=[self.playlist]):
+            self.assertTrue(callable(self.plugin._dependencies()))
+
+    def test_legacy_candidates_use_userrating_strategy_matches(self):
+        from beetsplug.userrating.similar import SimilarItems
+
+        self.plugin.config["algorithm"] = "legacy"
+        with patch(
+            "beetsplug.userrating.similar.get_similar_items",
+            return_value=SimilarItems(strategy=None, items=[self.flac, self.cbr]),
+        ) as legacy_matcher:
+            with patch("beets.plugins.find_plugins", return_value=[self.playlist]):
+                matcher = self.plugin._dependencies()
+            candidates = self.plugin._candidates(
+                self.lib, matcher, self.original, 0.99
+            )
+        self.assertEqual(candidates, [(self.cbr, 0), (self.flac, 0)])
+        legacy_matcher.assert_called_once_with(self.lib, self.original)
 
     def test_corrupt_cache_is_not_overwritten(self):
         path = self.root / "choices.json"
