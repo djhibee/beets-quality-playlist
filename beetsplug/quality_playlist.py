@@ -133,7 +133,9 @@ class QualityPlaylistPlugin(BeetsPlugin):
             raise ui.UserError("Enable the official playlist plugin")
         algorithm = self.config["algorithm"].get(str)
         if algorithm == "legacy":
-            raise ui.UserError("The legacy matching algorithm is not yet defined")
+            from beetsplug.userrating.similar import get_similar_items
+
+            return get_similar_items
         if algorithm != "similarity":
             raise ui.UserError("quality_playlist.algorithm must be similarity or legacy")
         for plugin in enabled:
@@ -180,6 +182,12 @@ class QualityPlaylistPlugin(BeetsPlugin):
         return bytestring_path(config["playlist"]["relative_to"].as_filename())
 
     def _candidates(self, lib, similarity, original, threshold, pretend=False):
+        if self.config["algorithm"].get(str) == "legacy":
+            similar = similarity(lib, original)
+            return sorted(
+                [(item, 0) for item in similar.items] if similar else [],
+                key=lambda pair: pair[0].id,
+            )
         # Avoid creating similarity tables when the matrix is not populated.
         with lib.transaction() as tx:
             exists = tx.query(

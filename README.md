@@ -12,8 +12,9 @@ Requires Python 3.12+ and Beets 2.14.1+:
 python -m pip install .
 ```
 
-Installation includes [beets-similarity](https://github.com/djhibee/beets-similarity),
-pinned to a compatible GitHub revision (it is not currently published on PyPI).
+Installation includes [beets-similarity](https://github.com/djhibee/beets-similarity)
+and [beets-userrating](https://github.com/djhibee/beets-userrating), pinned to
+compatible GitHub revisions (they are not currently published on PyPI).
 Enable all three plugins in your Beets configuration:
 
 ```yaml
@@ -26,7 +27,7 @@ playlist:
   auto: true
 
 quality_playlist:
-  algorithm: similarity
+  algorithm: similarity  # alternatively: legacy
   quality: LOSSLESS
   min_threshold: 0.8
   strong_rec_thresh: 0.04
@@ -41,12 +42,17 @@ only `qualityPlaylist`. The official plugin alone owns `playlist:` searches
 and path maintenance, including generated playlists. Enable `playlist.auto`
 to maintain their paths after Beets moves/removes tracks.
 
-Populate the similarity matrix first, using the similarity plugin's command,
-for example `beet similarity --force`. Quality playlists only read stored
-matches; an empty matrix leaves the original tracks in place.
-Configure similarity's weights and artist/acoustic settings there, not here.
-The reserved `algorithm: legacy` setting reports that its algorithm is not yet
-defined; it does not silently use a different matching method.
+With `algorithm: similarity`, populate the similarity matrix first, using the
+similarity plugin's command, for example `beet similarity --force`. Quality
+playlists only read stored matches; an empty matrix leaves the original tracks
+in place. Configure similarity's weights and artist/acoustic settings there,
+not here.
+
+`algorithm: legacy` uses beets-userrating's ordered matching strategies:
+MusicBrainz release track, recording, AcoustID, fingerprint, exact artist/title,
+then bare-ASCII and fuzzy matches when their plugins are enabled. These matches
+have no similarity scores, so they are treated as distance zero; the similarity
+threshold does not filter legacy matches.
 
 ## Usage
 
@@ -74,8 +80,9 @@ not found in the library are preserved. Unknown entries are logged.
 
 ### Selection policy
 
-* Matches are ordered by distance (`1 - similarity score`). `min_threshold`
-  is the **minimum similarity**, inclusive, in `(0, 1]`, not a distance limit.
+* In `similarity` mode, matches are ordered by distance (`1 - similarity
+  score`). `min_threshold` is the **minimum similarity**, inclusive, in
+  `(0, 1]`, not a distance limit. It does not filter `legacy` matches.
 * In `LOSSLESS` mode, a lossless original is retained. Otherwise, a matching
   lossless version takes precedence over closer lossy versions; if none is
   available, an eligible lossy upgrade is used.
@@ -96,8 +103,9 @@ not found in the library are preserved. Unknown entries are logged.
   The upgrade-gap rule does not apply to lossless-to-lossy replacements.
 * An unambiguous candidate is automatically accepted only when its distance
   is **less than** `strong_rec_thresh`. If omitted, this setting inherits
-  Beets' `match.strong_rec_thresh`. Otherwise, the user selects a numbered
-  candidate, keeps the original, or aborts.
+  Beets' `match.strong_rec_thresh`. Legacy matches have distance zero because
+  the legacy matcher does not return scores. Otherwise, the user selects a
+  numbered candidate, keeps the original, or aborts.
 
 `--timid` always asks before a new replacement, even for strong matches.
 `--quiet` never prompts: unresolved matches retain the original and log the
