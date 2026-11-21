@@ -261,6 +261,8 @@ class QualityPlaylistPlugin(BeetsPlugin):
             for item, _ in eligible:
                 if selected == item.id:
                     self._log.info("Using cached choice: {} -> {}", original, item)
+                    if not quiet:
+                        ui.print_(f"{strategy}: {original} -> {item} (from cache)")
                     return item, False
         if not eligible:
             return original, False
@@ -288,7 +290,10 @@ class QualityPlaylistPlugin(BeetsPlugin):
             return original, False
         ui.print_(f"{strategy}: {original} ({describe_quality(original)})")
         for number, (item, distance) in enumerate(eligible, 1):
-            ui.print_(f"{number}: {item} ({describe_quality(item)}, distance {distance:.4f})")
+            line = f"{number}: {item} ({describe_quality(item)}, distance {distance:.4f})"
+            if not os.path.exists(syspath(item.path)):
+                line += " " + ui.colorize("text_error", "[file missing]")
+            ui.print_(line)
         setting = self.config["default_choice"].as_choice(["keep", "abort", "best"])
         default = {
             "keep": "k",
