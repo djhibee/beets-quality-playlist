@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 from beets import config, plugins, ui
-from beets.dbcore.query import MatchQuery
+from beets.dbcore.query import PathQuery
 from beets.plugins import BeetsPlugin
 from beets.util import bytestring_path, normpath, path_as_posix, syspath
 
@@ -313,7 +313,12 @@ class QualityPlaylistPlugin(BeetsPlugin):
                 if config["playlist"]["forward_slash"].get(bool):
                     entry = entry.replace(b"/", os.sep.encode())
                 path = normpath(os.path.join(base, entry))
-                original = next(iter(lib.items(MatchQuery("path", path))), None)
+                # PathQuery handles the DB's library-relative path storage.
+                original = next(
+                    (item for item in lib.items(PathQuery("path", path))
+                     if normpath(item.path) == path),
+                    None,
+                )
                 if original is None:
                     self._log.warning("Not in library; preserving playlist entry: {}", syspath(path))
                     if base == output_base or os.path.isabs(entry):
