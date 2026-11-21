@@ -38,6 +38,19 @@ def quality(item):
     return bitrate
 
 
+def describe_quality(item):
+    """Human-readable quality for prompts."""
+    rank = quality(item)
+    if rank == math.inf:
+        return f"lossless {item.get('format', '')}".strip()
+    settings = str(item.get("encoder_settings", ""))
+    if rank == V0 and re.search(r"V\s*0\b", settings, re.I):
+        return "LAME V0"
+    if rank == V2 and re.search(r"V\s*2\b", settings, re.I):
+        return "LAME V2"
+    return f"{rank / 1000:.0f} kbps" if rank else "unknown bitrate"
+
+
 def atomic_write(path, content):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -272,9 +285,9 @@ class QualityPlaylistPlugin(BeetsPlugin):
                 [(item.id, distance) for item, distance in eligible],
             )
             return original, False
-        ui.print_(f"{strategy}: {original} (quality {origin_quality:g})")
+        ui.print_(f"{strategy}: {original} ({describe_quality(original)})")
         for number, (item, distance) in enumerate(eligible, 1):
-            ui.print_(f"{number}: {item} (quality {quality(item):g}, distance {distance:.4f})")
+            ui.print_(f"{number}: {item} ({describe_quality(item)}, distance {distance:.4f})")
         answer = ui.input_options(
             ["Keep original", "aBort"], numrange=(1, len(eligible)), default="k"
         )

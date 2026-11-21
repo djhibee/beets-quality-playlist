@@ -14,6 +14,7 @@ from beetsplug.quality_playlist import (
     V0,
     V2,
     ChoiceCache,
+    describe_quality,
     QualityPlaylistPlugin,
     quality,
 )
@@ -75,6 +76,13 @@ class QualityPlaylistTest(unittest.TestCase):
         opts, positional = command.parse_args(list(args))
         with patch("beets.plugins.find_plugins", return_value=[self.playlist, self.similarity]):
             command.func(self.lib, opts, positional)
+
+    def test_describe_quality(self):
+        self.assertEqual(describe_quality(self.flac), "lossless FLAC")
+        self.assertEqual(describe_quality(self.v0), "LAME V0")
+        self.assertEqual(describe_quality(self.v2), "LAME V2")
+        self.assertEqual(describe_quality(self.cbr), "320 kbps")
+        self.assertEqual(describe_quality(Item(title="x")), "unknown bitrate")
 
     def test_quality_order(self):
         low = self.item("128.mp3", 128_000)
