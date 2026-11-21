@@ -39,16 +39,21 @@ def quality(item):
 
 
 def describe_quality(item):
-    """Human-readable quality for prompts."""
+    """Human-readable quality: format, LAME preset and measured bitrate."""
     rank = quality(item)
+    fmt = str(item.get("format", "")).strip()
     if rank == math.inf:
-        return f"lossless {item.get('format', '')}".strip()
+        return f"lossless {fmt}".strip()
+    bitrate = max(0, item.get("bitrate", 0) or 0)
+    kbps = f"{bitrate / 1000:.0f} kbps" if bitrate else "unknown bitrate"
     settings = str(item.get("encoder_settings", ""))
     if rank == V0 and re.search(r"V\s*0\b", settings, re.I):
-        return "LAME V0"
-    if rank == V2 and re.search(r"V\s*2\b", settings, re.I):
-        return "LAME V2"
-    return f"{rank / 1000:.0f} kbps" if rank else "unknown bitrate"
+        label = "LAME V0"
+    elif rank == V2 and re.search(r"V\s*2\b", settings, re.I):
+        label = "LAME V2"
+    else:
+        return f"{fmt} {kbps}".strip()
+    return f"{fmt} {label}, {kbps}".strip()
 
 
 def atomic_write(path, content):
@@ -132,6 +137,10 @@ class QualityPlaylistPlugin(BeetsPlugin):
         command.parser.add_option("--quiet", action="store_true", default=False)
         command.parser.add_option("-t", "--timid", action="store_true", default=False)
         command.parser.add_option("--pretend", action="store_true", default=False)
+        command.parser.add_option(
+            "--debug", action="store_true", default=False,
+            help="show file paths instead of item ids in log messages",
+        )
         command.func = self._command
         return [command]
 
@@ -284,8 +293,8 @@ class QualityPlaylistPlugin(BeetsPlugin):
         if quiet:
             self._log.warning(
                 "Unresolved {} choice for item {}: keeping original; candidates {}",
-                strategy, original.id,
-                [(item.id, distance) for item, distance in eligible],
+                strategy, self._ref(original),
+                [(self._ref(item), distance) for item, distance in eligible],
             )
             return original, False
         ui.print_(f"{strategy}: {original} ({describe_quality(original)})")
@@ -309,13 +318,16 @@ class QualityPlaylistPlugin(BeetsPlugin):
         cache.put(strategy, original, trump)
         return trump, True
 
+    def _ref(self, item):
+        return syspath(item.path) if getattr(self, "_debug", False) else item.id
+
     def _log_selection(self, original, trump, strategy):
-        self._log.info("{}: item {} -> item {}", strategy, original.id, trump.id)
+        self._log.info("{}: item {} -> item {}", strategy, self._ref(original), self._ref(trump))
         rank = quality(trump)
         if rank < V0 or (strategy == "LOSSLESS") != (rank == math.inf):
             self._log.warning(
                 "Review {} selection: original {}, trump {}, quality {}",
-                strategy, original.id, trump.id, rank,
+                strategy, self._ref(original), self._ref(trump), describe_quality(trump),
             )
 
     def _render(self, lib, source, output, similarity, threshold, strategy,
@@ -375,6 +387,7 @@ class QualityPlaylistPlugin(BeetsPlugin):
     def _command(self, lib, opts, args):
         if args:
             raise ui.UserError("Use -p to select a reference playlist")
+        self._debug = opts.debug
         similarity = self._dependencies()
         strategy = (opts.quality or self.config["quality"].get(str)).upper()
         if strategy not in {"LOSSY", "LOSSLESS"}:
