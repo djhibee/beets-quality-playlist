@@ -321,8 +321,20 @@ class QualityPlaylistPlugin(BeetsPlugin):
     def _ref(self, item):
         return syspath(item.path) if getattr(self, "_debug", False) else item.id
 
-    def _log_selection(self, original, trump, strategy):
+    def _log_selection(self, original, trump, strategy, kept_by_user=False):
         self._log.info("{}: item {} -> item {}", strategy, self._ref(original), self._ref(trump))
+        if trump.id == original.id:
+            if kept_by_user:
+                outcome = ui.colorize("action", "ORIGINAL KEPT BY USER")
+            else:
+                outcome = ui.colorize("text_error", "NO TRUMP FOUND")
+            rank = quality(original)
+            if rank < V0 or (strategy == "LOSSLESS") != (rank == math.inf):
+                self._log.warning(
+                    "Review {} selection: original {}, {}",
+                    strategy, self._ref(original), outcome,
+                )
+            return
         rank = quality(trump)
         if rank < V0 or (strategy == "LOSSLESS") != (rank == math.inf):
             self._log.warning(
@@ -373,7 +385,11 @@ class QualityPlaylistPlugin(BeetsPlugin):
                     original, candidates, strategy, quiet, timid, strong, gap, cache
                 )
                 dirty |= chosen
-                self._log_selection(original, trump, strategy)
+                cached = cache.get(strategy, original)
+                kept = trump.id == original.id and (
+                    chosen or (isinstance(cached, dict) and cached.get("trump") == original.id)
+                )
+                self._log_selection(original, trump, strategy, kept)
                 target = bytestring_path(trump.path)
                 if not os.path.isabs(entry):
                     target = os.path.relpath(target, output_base)
