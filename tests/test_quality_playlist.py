@@ -376,6 +376,25 @@ class QualityPlaylistTest(unittest.TestCase):
         self.assertFalse((external / output.name).exists())
         self.assertIn(str(output), list(self.playlist.find_playlists()))
 
+    def test_item_found_when_library_directory_is_subdirectory(self):
+        music = self.root / "music"
+        music.mkdir()
+        config["directory"] = str(music)
+        lib = Library(self.root / "sub.db", directory=str(music))
+        self.addCleanup(lib._close)
+        item = Item(path=str(music / "Kaya [1978].mp3").encode(), title="Song", bitrate=320_000, format="MP3")
+        lib.add(item)
+        source = self.root / "sub.m3u"
+        source.write_bytes(b"music/Kaya [1978].mp3\n")
+        with self.assertLogs(self.plugin._log, "WARNING") as logs:
+            self.plugin._log.warning("sentinel")
+            self.plugin._render(
+                lib, source, self.root / "sub.out.m3u", 0.5, 0.5, "LOSSY",
+                True, False, 0.04, 0.05, ChoiceCache(str(self.root / "c2.json"), lib),
+                pretend=True,
+            )
+        self.assertFalse(any("Not in library" in line for line in logs.output))
+
     def test_cache_cannot_overwrite_source(self):
         self.plugin.config["cache_file"] = str(self.source)
         with self.assertRaises(ui.UserError):
