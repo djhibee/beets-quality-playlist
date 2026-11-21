@@ -130,6 +130,8 @@ Selections below V0 or outside the requested quality type are logged for
 review. To retain logs, redirect command output, for example
 `beet qualityPlaylist --quiet 2>quality-review.log`.
 
+`--debug` logs file paths instead of item ids in selection messages.
+
 `--pretend` performs selection and reports intended outputs without writing
 playlists, the choice cache, or similarity tables/indexes. Interactive choices
 made during a pretend run are not persisted.

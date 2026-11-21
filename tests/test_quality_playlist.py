@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 
 from beets import config, ui
 from beets.library import Item, Library
+from beets.util import syspath
 from beetsplug.playlist import PlaylistPlugin
 from beetsplug.similarity import SimilarityPlugin, SimilarityStore
 from beetsplug.quality_playlist import (
@@ -79,10 +80,19 @@ class QualityPlaylistTest(unittest.TestCase):
 
     def test_describe_quality(self):
         self.assertEqual(describe_quality(self.flac), "lossless FLAC")
-        self.assertEqual(describe_quality(self.v0), "LAME V0")
-        self.assertEqual(describe_quality(self.v2), "LAME V2")
-        self.assertEqual(describe_quality(self.cbr), "320 kbps")
+        self.assertEqual(describe_quality(self.v0), "MP3 LAME V0, 245 kbps")
+        self.assertEqual(describe_quality(self.v2), "MP3 LAME V2, 190 kbps")
+        self.assertEqual(describe_quality(self.cbr), "MP3 320 kbps")
         self.assertEqual(describe_quality(Item(title="x")), "unknown bitrate")
+
+    def test_review_warning_uses_paths_in_debug_and_readable_quality(self):
+        for debug, expected in ((False, self.original.id), (True, syspath(self.original.path))):
+            self.plugin._debug = debug
+            with patch.object(self.plugin._log, "warning") as warning:
+                self.plugin._log_selection(self.original, self.original, "LOSSLESS")
+            args = warning.call_args.args
+            self.assertEqual(args[2], expected)
+            self.assertEqual(args[4], "MP3 192 kbps")
 
     def test_quality_order(self):
         low = self.item("128.mp3", 128_000)
