@@ -337,9 +337,8 @@ class QualityPlaylistPlugin(BeetsPlugin):
                 outcome = ui.colorize("text_error", "NO TRUMP FOUND")
             rank = quality(original)
             if rank < V0 or (strategy == "LOSSLESS") != (rank == math.inf):
-                self._log.warning(
-                    "Review {} selection: original {}, {}",
-                    strategy, self._ref(original), outcome,
+                ui.print_(
+                    f"Review {strategy} selection: original {self._ref(original)}, {outcome}"
                 )
             return
         rank = quality(trump)
