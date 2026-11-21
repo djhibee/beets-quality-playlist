@@ -297,6 +297,8 @@ class QualityPlaylistPlugin(BeetsPlugin):
                 [(self._ref(item), distance) for item, distance in eligible],
             )
             return original, False
+        # Recommended candidate first, then the rest by distance.
+        eligible = [selected] + [pair for pair in eligible if pair is not selected]
         ui.print_(f"{strategy}: {original} ({describe_quality(original)})")
         for number, (item, distance) in enumerate(eligible, 1):
             shown = f"{distance:.4f}"
