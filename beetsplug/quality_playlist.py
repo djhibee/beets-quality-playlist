@@ -115,6 +115,7 @@ class QualityPlaylistPlugin(BeetsPlugin):
                 "max_gap": 0.05,
                 "quiet": False,
                 "timid": False,
+                "default_choice": "keep",
                 "cache_file": "quality-playlist-choices.json",
             }
         )
@@ -288,8 +289,14 @@ class QualityPlaylistPlugin(BeetsPlugin):
         ui.print_(f"{strategy}: {original} ({describe_quality(original)})")
         for number, (item, distance) in enumerate(eligible, 1):
             ui.print_(f"{number}: {item} ({describe_quality(item)}, distance {distance:.4f})")
+        setting = self.config["default_choice"].as_choice(["keep", "abort", "best"])
+        default = {
+            "keep": "k",
+            "abort": "b",
+            "best": eligible.index(selected) + 1,
+        }[setting]
         answer = ui.input_options(
-            ["Keep original", "aBort"], numrange=(1, len(eligible)), default="k"
+            ["Keep original", "aBort"], numrange=(1, len(eligible)), default=default
         )
         if answer == "b":
             raise ui.UserError("Quality playlist generation aborted")

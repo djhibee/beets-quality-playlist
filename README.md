@@ -34,6 +34,7 @@ quality_playlist:
   max_gap: 0.05
   quiet: false
   timid: false
+  default_choice: keep
   cache_file: quality-playlist-choices.json
 ```
 
@@ -106,6 +107,10 @@ not found in the library are preserved. Unknown entries are logged.
   Beets' `match.strong_rec_thresh`. Legacy matches have distance zero because
   the legacy matcher does not return scores. Otherwise, the user selects a
   numbered candidate, keeps the original, or aborts.
+
+`default_choice` sets the answer taken when pressing Enter at a prompt:
+`keep` (default, keep original), `abort`, or `best` (the suggested
+candidate: the quality-preferred one, or the nearest one on a gap conflict).
 
 `--timid` always asks before a new replacement, even for strong matches.
 `--quiet` never prompts: unresolved matches retain the original and log the
