@@ -256,7 +256,7 @@ class QualityPlaylistPlugin(BeetsPlugin):
             for item, distance in candidates
             if (
                 quality(item) > origin_quality
-                and (quality(item) == math.inf or origin_quality <= V0)
+                and (quality(item) == math.inf or origin_quality < V0)
                 if origin_quality != math.inf
                 else quality(item) != math.inf
             )

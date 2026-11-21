@@ -197,6 +197,9 @@ class QualityPlaylistTest(unittest.TestCase):
             self.flac,
         )
 
+    def test_v0_does_not_upgrade_to_other_lossy(self):
+        self.assertEqual(self.choose([(self.cbr, 0.001)], original=self.v0), self.v0)
+
     def test_lossless_retained_or_downgraded_to_highest_lossy(self):
         self.assertEqual(
             self.choose([(self.cbr, 0.001)], "LOSSLESS", original=self.flac), self.flac
