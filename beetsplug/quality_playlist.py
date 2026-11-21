@@ -299,7 +299,12 @@ class QualityPlaylistPlugin(BeetsPlugin):
             return original, False
         ui.print_(f"{strategy}: {original} ({describe_quality(original)})")
         for number, (item, distance) in enumerate(eligible, 1):
-            line = f"{number}: {item} ({describe_quality(item)}, distance {distance:.4f})"
+            shown = f"{distance:.4f}"
+            if distance == 0:
+                shown = ui.colorize("text_success", shown)
+            elif distance < strong:
+                shown = ui.colorize("action_default", shown)
+            line = f"{number}: {item} ({describe_quality(item)}, distance {shown})"
             if not os.path.exists(syspath(item.path)):
                 line += " " + ui.colorize("text_error", "[file missing]")
             ui.print_(line)
