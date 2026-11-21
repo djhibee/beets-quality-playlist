@@ -44,10 +44,30 @@ and path maintenance, including generated playlists. Enable `playlist.auto`
 to maintain their paths after Beets moves/removes tracks.
 
 With `algorithm: similarity`, populate the similarity matrix first, using the
-similarity plugin's command, for example `beet similarity --force`. Quality
-playlists only read stored matches; an empty matrix leaves the original tracks
-in place. Configure similarity's weights and artist/acoustic settings there,
-not here.
+similarity plugin's `beet similar --add` command. Quality playlists only read
+stored matches; an empty matrix leaves the original tracks in place. Configure
+similarity's weights and artist/acoustic settings there, not here.
+
+```sh
+# Only the tracks of a playlist (compared against the whole library)
+beet similar --add playlist:favorites
+
+# Faster: 4 worker processes, 500 pairs saved per batch
+beet similar --add --jobs 4 --batch 500 playlist:favorites
+
+# One artist, or one album
+beet similar --add artist:"Daft Punk"
+beet similar --add album:"Discovery"
+
+# Whole library (long; resumable, only missing pairs are scored)
+beet similar --add --jobs 4
+
+# Recompute existing scores too
+beet similar --add -f playlist:favorites
+
+# Check the result: neighbors at or above the threshold
+beet similar --list --thres 0.8 playlist:favorites
+```
 
 `algorithm: legacy` uses beets-userrating's ordered matching strategies:
 MusicBrainz release track, recording, AcoustID, fingerprint, exact artist/title,
