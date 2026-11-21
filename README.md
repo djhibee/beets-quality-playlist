@@ -96,8 +96,8 @@ not found in the library are preserved. Unknown entries are logged.
   `encoder_settings` are ranked at 225/300 kbit/s respectively. Other lossy
   files use measured `bitrate` (bits/s); missing bitrate ranks lowest.
   Presets cannot reliably be inferred from average bitrate alone.
-* A lossy original above V0 never upgrades to another lossy version, but can
-  upgrade to lossless. At V0, a lossy upgrade is still permitted.
+* A lossy original at or above V0 never upgrades to another lossy version, but
+  can upgrade to lossless.
 * Among candidates of the desired type, prefer higher quality when its
   distance minus the nearest candidate's distance is **less than** `max_gap`.
   A higher-quality upgrade outside that gap requires a choice.
