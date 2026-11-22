@@ -120,6 +120,7 @@ class QualityPlaylistPlugin(BeetsPlugin):
                 "max_gap": 0.05,
                 "quiet": False,
                 "timid": False,
+                "recompute": False,
                 "default_choice": "keep",
                 "cache_file": "quality-playlist-choices.json",
             }
@@ -136,6 +137,10 @@ class QualityPlaylistPlugin(BeetsPlugin):
         )
         command.parser.add_option("--quiet", action="store_true", default=False)
         command.parser.add_option("-t", "--timid", action="store_true", default=False)
+        command.parser.add_option(
+            "--recompute", action="store_true", default=False,
+            help="score the track with beets-similarity when no match is found",
+        )
         command.parser.add_option("--pretend", action="store_true", default=False)
         command.parser.add_option(
             "--debug", action="store_true", default=False,
@@ -211,6 +216,24 @@ class QualityPlaylistPlugin(BeetsPlugin):
                 [(item, 0) for item in similar.items] if similar else [],
                 key=lambda pair: pair[0].id,
             )
+        recompute = getattr(self, "_recompute", False) and not pretend
+        matches = self._matches(lib, similarity, original, threshold, pretend)
+        if matches or not recompute or original.id in self._recomputed:
+            return matches
+        self._recomputed.add(original.id)
+        self._score(lib, similarity, original)
+        return self._matches(lib, similarity, original, threshold, pretend)
+
+    def _score(self, lib, similarity, original):
+        """Run `beet similar --add` for one track, scoring only missing pairs."""
+        command = next((c for c in similarity.commands() if c.name == "similar"), None)
+        if command is None:
+            raise ui.UserError("beets-similarity does not provide a 'similar' command")
+        self._log.info("Computing similarity for item {}", self._ref(original))
+        opts, args = command.parse_args(["--add", f"id:{original.id}"])
+        command.func(lib, opts, args)
+
+    def _matches(self, lib, similarity, original, threshold, pretend):
         # Avoid creating similarity tables when the matrix is not populated.
         with lib.transaction() as tx:
             exists = tx.query(
@@ -410,6 +433,8 @@ class QualityPlaylistPlugin(BeetsPlugin):
         if args:
             raise ui.UserError("Use -p to select a reference playlist")
         self._debug = opts.debug
+        self._recompute = opts.recompute or self.config["recompute"].get(bool)
+        self._recomputed = set()
         similarity = self._dependencies()
         strategy = (opts.quality or self.config["quality"].get(str)).upper()
         if strategy not in {"LOSSY", "LOSSLESS"}:
