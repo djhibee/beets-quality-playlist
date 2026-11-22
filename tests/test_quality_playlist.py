@@ -362,6 +362,19 @@ class QualityPlaylistTest(unittest.TestCase):
             b"lossless.flac\n", (self.root / "reference.quality-lossless.m3u").read_bytes()
         )
 
+    def test_recompute_scores_track_once_when_no_match(self):
+        self.plugin._recompute = True
+        self.plugin._recomputed = set()
+        self.similarity.similar_items.side_effect = [[], [(self.flac, 0.99)]]
+        with patch.object(self.plugin, "_score") as score:
+            first = self.plugin._candidates(self.lib, self.similarity, self.original, 0.8)
+            self.assertEqual([item for item, _ in first], [self.flac])
+            self.similarity.similar_items.side_effect = [[]]
+            self.assertEqual(
+                self.plugin._candidates(self.lib, self.similarity, self.original, 0.8), []
+            )
+            score.assert_called_once()
+
     def test_strong_recommendation_boundary(self):
         with patch("beets.ui.input_options", return_value="k") as prompt:
             self.choose([(self.cbr, 0.04)])

@@ -30,6 +30,7 @@ quality_playlist:
   algorithm: similarity  # alternatively: legacy
   quality: LOSSLESS
   min_threshold: 0.8
+  recompute: false  # score tracks without a match, see below
   strong_rec_thresh: 0.04
   max_gap: 0.05
   quiet: false
@@ -47,6 +48,11 @@ With `algorithm: similarity`, populate the similarity matrix first, using the
 similarity plugin's `beet similar --add` command. Quality playlists only read
 stored matches; an empty matrix leaves the original tracks in place. Configure
 similarity's weights and artist/acoustic settings there, not here.
+
+With `recompute: true` (or `--recompute`), a track with no match at or above
+the threshold, or no stored scores at all, is first scored with
+`beet similar --add id:<id>` (missing pairs only), then looked up once more.
+Each track is recomputed at most once per run; `--pretend` never recomputes.
 
 ```sh
 # Only the tracks of a playlist (compared against the whole library)
