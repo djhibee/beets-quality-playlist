@@ -176,7 +176,7 @@ beet qualityplaylist --diff G_BQQ -q LOSSLESS [--v]
 
 `-q` defaults to the plugin's `quality` setting. Without `--v`, lists the songs
 (paths) with no different pair (original kept). With `--v`, shows every song with its pair,
-paths right-aligned on separate lines: red = original kept, orange = upgraded but
+paths aligned on the extension dot on separate lines: red = original kept, orange = upgraded but
 still not meeting the target (e.g. LOSSY).
 
 Only the M3U files are read; the beets library is not queried.

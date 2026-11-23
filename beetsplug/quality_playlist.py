@@ -219,11 +219,12 @@ class QualityPlaylistPlugin(BeetsPlugin):
             if not opts.verbose:
                 continue
             color = {"kept": "text_error", "partial": "text_warning"}.get(status)
-            width = max(len(show(orig)), len(show(new)))
-            lines = (
-                f"original {show(orig):>{width}}",
-                f"quality  {show(new):>{width}}",
-            )
+            names = [show(orig), show(new)]
+            dots = [len(os.path.splitext(n)[0]) for n in names]
+            lines = [
+                f"{label} {' ' * (max(dots) - dot)}{name}"
+                for label, name, dot in zip(("original", "quality "), names, dots)
+            ]
             for line in lines:
                 ui.print_(ui.colorize(color, line) if color else line)
             ui.print_("")
