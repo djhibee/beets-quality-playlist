@@ -362,18 +362,63 @@ class QualityPlaylistTest(unittest.TestCase):
             b"lossless.flac\n", (self.root / "reference.quality-lossless.m3u").read_bytes()
         )
 
-    def test_recompute_scores_track_once_when_no_match(self):
+    def real_similarity(self):
+        self.similarity.similar_items = SimilarityPlugin.similar_items.__get__(self.similarity)
+
+    def recompute_candidates(self, item, pretend=False):
         self.plugin._recompute = True
         self.plugin._recomputed = set()
-        self.similarity.similar_items.side_effect = [[], [(self.flac, 0.99)]]
-        with patch.object(self.plugin, "_score") as score:
-            first = self.plugin._candidates(self.lib, self.similarity, self.original, 0.8)
-            self.assertEqual([item for item, _ in first], [self.flac])
-            self.similarity.similar_items.side_effect = [[]]
-            self.assertEqual(
-                self.plugin._candidates(self.lib, self.similarity, self.original, 0.8), []
-            )
+        return self.plugin._candidates(self.lib, self.similarity, item, 0.8, pretend)
+
+    def test_recompute_scores_track_without_stored_pairs(self):
+        self.real_similarity()
+        self.assertEqual(
+            self.plugin._candidates(self.lib, self.similarity, self.v2, 0.8), []
+        )
+        found = {item.id for item, _ in self.recompute_candidates(self.v2)}
+        self.assertEqual(found, {self.original.id, self.v0.id, self.cbr.id, self.flac.id})
+
+    def test_recompute_recreates_missing_matrix(self):
+        self.real_similarity()
+        with self.lib.transaction() as tx:
+            tx.mutate("DROP TABLE similarity")
+        found = {item.id for item, _ in self.recompute_candidates(self.original)}
+        self.assertIn(self.flac.id, found)
+
+    def test_recompute_keeps_stored_scores_and_runs_once_per_track(self):
+        self.real_similarity()
+        self.store.put(self.v2.id, self.v0.id, 0.123)
+        with patch.object(self.plugin, "_score", wraps=self.plugin._score) as score:
+            first = self.recompute_candidates(self.v2)
+            self.assertEqual(self.store.get(self.v2.id, self.v0.id)["score"], 0.123)
+            self.assertNotIn(self.v0.id, {item.id for item, _ in first})
+            self.plugin._candidates(self.lib, self.similarity, self.v2, 1.0)
             score.assert_called_once()
+
+    def test_recompute_skipped_when_a_match_exists_and_when_pretending(self):
+        self.real_similarity()
+        with patch.object(self.plugin, "_score") as score:
+            self.recompute_candidates(self.original)
+            self.recompute_candidates(self.v2, pretend=True)
+            score.assert_not_called()
+        self.assertIsNone(self.store.get(self.v2.id, self.v0.id))
+
+    def test_recompute_option_and_config_drive_playlist_generation(self):
+        self.real_similarity()
+        lonely = self.item("lonely.mp3", 128_000)
+        (self.root / "lonely.m3u").write_bytes(b"#EXTM3U\nlonely.mp3\n")
+        output = self.root / "lonely.quality-lossless.m3u"
+        self.command("-p", "lonely", "--quiet")
+        self.assertNotIn(b"lossless.flac", output.read_bytes())
+        self.command("-p", "lonely", "--quiet", "--recompute")
+        self.assertIn(b"lossless.flac\n", output.read_bytes())
+        self.assertIsNotNone(self.store.get(lonely.id, self.flac.id))
+
+        self.lib._connection().execute("DELETE FROM similarity")
+        self.lib._connection().commit()
+        self.plugin.config["recompute"] = True
+        self.command("-p", "lonely", "--quiet")
+        self.assertIn(b"lossless.flac\n", output.read_bytes())
 
     def test_strong_recommendation_boundary(self):
         with patch("beets.ui.input_options", return_value="k") as prompt:

@@ -50,8 +50,8 @@ stored matches; an empty matrix leaves the original tracks in place. Configure
 similarity's weights and artist/acoustic settings there, not here.
 
 With `recompute: true` (or `--recompute`), a track with no match at or above
-the threshold, or no stored scores at all, is first scored with
-`beet similar --add id:<id>` (missing pairs only), then looked up once more.
+the threshold, or no stored scores at all, is first scored by the similarity
+plugin against the whole library (missing pairs only), then looked up once more.
 Each track is recomputed at most once per run; `--pretend` never recomputes.
 
 ```sh

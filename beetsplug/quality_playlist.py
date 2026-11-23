@@ -225,13 +225,14 @@ class QualityPlaylistPlugin(BeetsPlugin):
         return self._matches(lib, similarity, original, threshold, pretend)
 
     def _score(self, lib, similarity, original):
-        """Run `beet similar --add` for one track, scoring only missing pairs."""
-        command = next((c for c in similarity.commands() if c.name == "similar"), None)
-        if command is None:
-            raise ui.UserError("beets-similarity does not provide a 'similar' command")
+        """Score one track against the whole library, keeping stored pairs."""
+        from beetsplug.similarity import SimilarityStore
+
         self._log.info("Computing similarity for item {}", self._ref(original))
-        opts, args = command.parse_args(["--add", f"id:{original.id}"])
-        command.func(lib, opts, args)
+        store = SimilarityStore(lib)
+        for other in sorted(lib.items(), key=lambda item: item.id):
+            if other.id != original.id and store.get(original.id, other.id) is None:
+                store.put(original.id, other.id, similarity.score(original, other))
 
     def _matches(self, lib, similarity, original, threshold, pretend):
         # Avoid creating similarity tables when the matrix is not populated.
