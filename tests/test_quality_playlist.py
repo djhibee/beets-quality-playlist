@@ -86,13 +86,14 @@ class QualityPlaylistTest(unittest.TestCase):
         self.assertEqual(describe_quality(Item(title="x")), "unknown bitrate")
 
     def test_review_warning_uses_paths_in_debug_and_readable_quality(self):
-        for debug, expected in ((False, self.original.id), (True, syspath(self.original.path))):
+        for debug, ref in ((False, lambda i: i.id), (True, lambda i: syspath(i.path))):
             self.plugin._debug = debug
             with patch.object(self.plugin._log, "warning") as warning:
-                self.plugin._log_selection(self.original, self.original, "LOSSLESS")
+                self.plugin._log_selection(self.original, self.v2, "LOSSLESS")
             args = warning.call_args.args
-            self.assertEqual(args[2], expected)
-            self.assertEqual(args[4], "MP3 192 kbps")
+            self.assertEqual(args[2], ref(self.original))
+            self.assertEqual(args[3], ref(self.v2))
+            self.assertEqual(args[4], "MP3 LAME V2, 190 kbps")
 
     def test_quality_order(self):
         low = self.item("128.mp3", 128_000)
