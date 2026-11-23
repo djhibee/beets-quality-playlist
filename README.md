@@ -167,3 +167,14 @@ made during a pretend run are not persisted.
 ```sh
 python -m unittest discover -s tests -v
 ```
+
+## Comparing a playlist with its quality playlist
+
+```
+beet qualityplaylist --diff G_BQQ -q LOSSLESS [--v]
+```
+
+`-q` defaults to the plugin's `quality` setting. Without `--v`, lists the songs
+(`id; path`) with no different pair (original kept). With `--v`, shows every song with its pair,
+paths aligned on separate lines: red = original kept, orange = upgraded but
+still not meeting the target (e.g. LOSSY).

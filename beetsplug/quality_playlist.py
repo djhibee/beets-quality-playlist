@@ -128,12 +128,21 @@ class QualityPlaylistPlugin(BeetsPlugin):
 
     def commands(self):
         command = ui.Subcommand(
-            "qualityPlaylist", help="generate quality-specific M3U playlists"
+            "qualityPlaylist", help="generate quality-specific M3U playlists",
+            aliases=["qualityplaylist"],
         )
         command.parser.add_option("-q", "--quality", dest="quality")
         command.parser.add_option("-p", "--playlist", dest="playlist")
         command.parser.add_option(
             "--min-threshold", "--min_threshold", type="float", dest="min_threshold"
+        )
+        command.parser.add_option(
+            "--diff", dest="diff", metavar="PLAYLIST",
+            help="compare a playlist with its quality playlist (see -q)",
+        )
+        command.parser.add_option(
+            "--v", "--verbose", dest="verbose", action="store_true", default=False,
+            help="with --diff, show every song and its pair",
         )
         command.parser.add_option("--quiet", action="store_true", default=False)
         command.parser.add_option("-t", "--timid", action="store_true", default=False)
@@ -148,6 +157,83 @@ class QualityPlaylistPlugin(BeetsPlugin):
         )
         command.func = self._command
         return [command]
+
+    @staticmethod
+    def _meets(strategy, item):
+        rank = quality(item)
+        return rank == math.inf if strategy == "LOSSLESS" else rank >= V0
+
+    def _entries(self, lib, path):
+        """Playlist entries as (library item or None, absolute path)."""
+        base = self._base(path)
+        entries = []
+        with open(path, "rb") as stream:
+            for line in stream:
+                entry = line.rstrip(b"\r\n").removeprefix(b"\xef\xbb\xbf")
+                if not entry or entry.startswith(b"#"):
+                    continue
+                if config["playlist"]["forward_slash"].get(bool):
+                    entry = entry.replace(b"/", os.sep.encode())
+                target = normpath(os.path.join(base, entry))
+                item = next(
+                    (i for i in lib.items(PathQuery("path", target))
+                     if normpath(i.path) == target),
+                    None,
+                )
+                entries.append((item, target))
+        return entries
+
+    def _diff(self, lib, opts):
+        strategy = (opts.quality or self.config["quality"].get(str)).upper()
+        if strategy not in {"LOSSY", "LOSSLESS"}:
+            raise ui.UserError("Quality must be LOSSY or LOSSLESS")
+        source = self._playlists(opts.diff)[0]
+        directory = Path(config["playlist"]["playlist_dir"].as_filename())
+        output = directory / f"{source.stem}.quality-{strategy.lower()}{source.suffix}"
+        if not output.is_file() or not self._generated(output):
+            raise ui.UserError(f"Quality playlist not found: {output}")
+        originals = self._entries(lib, source)
+        trumps = self._entries(lib, output)
+        if len(originals) != len(trumps):
+            raise ui.UserError(
+                f"{source.name} and {output.name} are out of sync; regenerate the quality playlist"
+            )
+
+        def ident(item):
+            return str(item.id) if item is not None else "-"
+
+        def show(path):
+            return syspath(path).decode() if isinstance(syspath(path), bytes) else syspath(path)
+
+        width = max(
+            [len(ident(i)) for pair in zip(originals, trumps) for i, _ in pair] or [1]
+        )
+        missing = []
+        for (orig, orig_path), (new, new_path) in zip(originals, trumps):
+            kept = new_path == orig_path
+            if kept:
+                missing.append((orig, orig_path))
+                status = "ok" if orig is not None and self._meets(strategy, orig) else "kept"
+            elif new is not None and not self._meets(strategy, new):
+                status = "partial"
+            else:
+                status = "ok"
+            if not opts.verbose:
+                continue
+            color = {"kept": "text_error", "partial": "text_warning"}.get(status)
+            lines = [
+                f"original [{ident(orig):>{width}}] {show(orig_path)}",
+                f"quality  [{ident(new):>{width}}] {show(new_path)}",
+            ]
+            for line in lines:
+                ui.print_(ui.colorize(color, line) if color else line)
+            ui.print_("")
+        if not opts.verbose:
+            for item, path in missing:
+                ui.print_(f"{ident(item)}; {show(path)}")
+        ui.print_(
+            f"{len(missing)} of {len(originals)} songs without a {strategy} pair"
+        )
 
     def _number(self, name, override=None):
         value = self.config[name].as_number() if override is None else override
@@ -432,6 +518,10 @@ class QualityPlaylistPlugin(BeetsPlugin):
         return b"".join(result), dirty
 
     def _command(self, lib, opts, args):
+        if opts.diff:
+            if args:
+                raise ui.UserError("Use --diff PLAYLIST without extra arguments")
+            return self._diff(lib, opts)
         if args:
             raise ui.UserError("Use -p to select a reference playlist")
         self._debug = opts.debug

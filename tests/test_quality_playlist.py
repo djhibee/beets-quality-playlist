@@ -78,6 +78,24 @@ class QualityPlaylistTest(unittest.TestCase):
         with patch("beets.plugins.find_plugins", return_value=[self.playlist, self.similarity]):
             command.func(self.lib, opts, positional)
 
+    def test_diff_lists_unpaired_and_colors_verbose(self):
+        (self.root / "reference.quality-lossless.m3u").write_bytes(
+            MARKER + b"LOSSLESS\noriginal.mp3\n"
+        )
+        opts = Mock(diff="reference", quality=None, verbose=True)
+        with patch.object(ui, "print_") as printed:
+            self.plugin._diff(self.lib, opts)
+        text = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+        self.assertIn("original [%d]" % self.original.id, text)
+        self.assertIn("1 of 1 songs without a LOSSLESS pair", text)
+        opts.verbose = False
+        with patch.object(ui, "print_") as printed:
+            self.plugin._diff(self.lib, opts)
+        self.assertEqual(
+            printed.call_args_list[0].args[0],
+            f"{self.original.id}; {syspath(self.original.path)}",
+        )
+
     def test_describe_quality(self):
         self.assertEqual(describe_quality(self.flac), "lossless FLAC")
         self.assertEqual(describe_quality(self.v0), "MP3 LAME V0, 245 kbps")
