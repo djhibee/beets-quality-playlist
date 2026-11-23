@@ -178,9 +178,25 @@ class QualityPlaylistPlugin(BeetsPlugin):
                     continue
                 if config["playlist"]["forward_slash"].get(bool):
                     entry = entry.replace(b"/", os.sep.encode())
-                targets = [normpath(os.path.join(b, entry)) for b in bases]
+                targets = []
+                if not os.path.isabs(entry):
+                    # Entries like ../music/x may have been written from another
+                    # directory: try without the leading ".." first, from each
+                    # base and its ancestors.
+                    stripped = entry
+                    while stripped.startswith((b"../", b"..\\")):
+                        stripped = stripped[3:]
+                    for b in bases:
+                        while True:
+                            targets.append(normpath(os.path.join(b, stripped)))
+                            parent = os.path.dirname(b)
+                            if parent == b:
+                                break
+                            b = parent
+                configured = normpath(os.path.join(bases[0], entry))
+                targets += [configured] + [normpath(os.path.join(b, entry)) for b in bases[1:]]
                 entries.append(
-                    next((t for t in targets if os.path.exists(syspath(t))), targets[0])
+                    next((t for t in targets if os.path.exists(syspath(t))), configured)
                 )
         return entries
 
