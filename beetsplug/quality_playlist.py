@@ -285,6 +285,8 @@ class QualityPlaylistPlugin(BeetsPlugin):
             )
             and (strategy != "LOSSY" or quality(item) != math.inf)
         ]
+        # Equal distances: higher quality first.
+        eligible.sort(key=lambda pair: (pair[1], -quality(pair[0]), pair[0].id))
         cached = cache.get(strategy, original)
         if isinstance(cached, dict):
             selected = cached.get("trump")
