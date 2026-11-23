@@ -132,6 +132,15 @@ class QualityPlaylistTest(unittest.TestCase):
             self.flac,
         )
 
+    def test_equal_distance_lists_higher_quality_first(self):
+        shown = []
+        with patch("beets.ui.print_", side_effect=shown.append), \
+                patch("beets.ui.input_options", return_value=1):
+            self.choose(
+                [(self.cbr, 0.18), (self.flac, 0.18)], "LOSSLESS", timid=True,
+            )
+        self.assertTrue(shown[1].startswith("1: ") and "FLAC" in shown[1])
+
     def test_higher_lossy_within_gap_wins(self):
         self.assertEqual(self.choose([(self.v2, 0.001), (self.cbr, 0.03)]), self.cbr)
 
