@@ -158,14 +158,18 @@ class QualityPlaylistPlugin(BeetsPlugin):
         command.func = self._command
         return [command]
 
-    @staticmethod
-    def _meets(strategy, item):
-        rank = quality(item)
-        return rank == math.inf if strategy == "LOSSLESS" else rank >= V0
+    def _entries(self, path):
+        """Absolute paths listed in an M3U file; the library is not consulted.
 
-    def _entries(self, lib, path):
-        """Playlist entries as (library item or None, absolute path)."""
+        A relative entry is resolved against the configured base, falling back
+        to the library or playlist directory when that file does not exist.
+        """
         base = self._base(path)
+        bases = [
+            base,
+            bytestring_path(config["directory"].as_filename()),
+            bytestring_path(path.parent),
+        ]
         entries = []
         with open(path, "rb") as stream:
             for line in stream:
@@ -174,13 +178,10 @@ class QualityPlaylistPlugin(BeetsPlugin):
                     continue
                 if config["playlist"]["forward_slash"].get(bool):
                     entry = entry.replace(b"/", os.sep.encode())
-                target = normpath(os.path.join(base, entry))
-                item = next(
-                    (i for i in lib.items(PathQuery("path", target))
-                     if normpath(i.path) == target),
-                    None,
+                targets = [normpath(os.path.join(b, entry)) for b in bases]
+                entries.append(
+                    next((t for t in targets if os.path.exists(syspath(t))), targets[0])
                 )
-                entries.append((item, target))
         return entries
 
     def _diff(self, lib, opts):
@@ -192,45 +193,43 @@ class QualityPlaylistPlugin(BeetsPlugin):
         output = directory / f"{source.stem}.quality-{strategy.lower()}{source.suffix}"
         if not output.is_file() or not self._generated(output):
             raise ui.UserError(f"Quality playlist not found: {output}")
-        originals = self._entries(lib, source)
-        trumps = self._entries(lib, output)
+        originals = self._entries(source)
+        trumps = self._entries(output)
         if len(originals) != len(trumps):
             raise ui.UserError(
                 f"{source.name} and {output.name} are out of sync; regenerate the quality playlist"
             )
 
-        def ident(item):
-            return str(item.id) if item is not None else "-"
-
         def show(path):
             return syspath(path).decode() if isinstance(syspath(path), bytes) else syspath(path)
 
-        width = max(
-            [len(ident(i)) for pair in zip(originals, trumps) for i, _ in pair] or [1]
-        )
+        def lossless(path):
+            suffix = os.path.splitext(show(path))[1].lstrip(".").upper()
+            return suffix in LOSSLESS_FORMATS
+
         missing = []
-        for (orig, orig_path), (new, new_path) in zip(originals, trumps):
-            kept = new_path == orig_path
-            if kept:
-                missing.append((orig, orig_path))
-                status = "ok" if orig is not None and self._meets(strategy, orig) else "kept"
-            elif new is not None and not self._meets(strategy, new):
+        for orig, new in zip(originals, trumps):
+            if new == orig:
+                missing.append(orig)
+                status = "kept"
+            elif strategy == "LOSSLESS" and not lossless(new):
                 status = "partial"
             else:
                 status = "ok"
             if not opts.verbose:
                 continue
             color = {"kept": "text_error", "partial": "text_warning"}.get(status)
-            lines = [
-                f"original [{ident(orig):>{width}}] {show(orig_path)}",
-                f"quality  [{ident(new):>{width}}] {show(new_path)}",
-            ]
+            width = max(len(show(orig)), len(show(new)))
+            lines = (
+                f"original {show(orig):>{width}}",
+                f"quality  {show(new):>{width}}",
+            )
             for line in lines:
                 ui.print_(ui.colorize(color, line) if color else line)
             ui.print_("")
         if not opts.verbose:
-            for item, path in missing:
-                ui.print_(f"{ident(item)}; {show(path)}")
+            for path in missing:
+                ui.print_(show(path))
         ui.print_(
             f"{len(missing)} of {len(originals)} songs without a {strategy} pair"
         )
