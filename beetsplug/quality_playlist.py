@@ -42,13 +42,22 @@ def quality_playlist_path(source, directory, strategy):
             raise ui.UserError(f"Invalid encoded Synology playlist name: {source}") from None
 
         def encode_name(value):
-            result = quote(value, safe="-_ ").replace(".", "%2E")
-            result = result.rstrip(" ") + "%20" * (len(result) - len(result.rstrip(" ")))
+            result = quote(value, safe="-_ ")
+            trailing = result[len(result.rstrip(". ")):]
+            result = result.rstrip(". ") + "".join(
+                "%2E" if char == "." else "%20" for char in trailing
+            )
             if result.startswith(("G_", "P_")):
                 result = f"%{ord(result[0]):02X}" + result[1:]
             return result
 
-        if not name or encode_name(name) != encoded:
+        canonical = encode_name(name)
+        trailing = re.search(r"(?:%2E|%20)+$", canonical)
+        if (
+            not name
+            or encoded.replace("%2E", ".") != canonical.replace("%2E", ".")
+            or trailing and not encoded.endswith(trailing.group())
+        ):
             raise ui.UserError(f"Invalid encoded Synology playlist name: {source}")
         stem = f"{parts[0]}_{parts[1]}_{encode_name(name + suffix)}"
         if len(os.fsencode(stem + source.suffix)) > 255:
@@ -56,6 +65,26 @@ def quality_playlist_path(source, directory, strategy):
     else:
         stem += suffix
     return directory / (stem + source.suffix)
+
+
+def existing_quality_playlist_path(source, directory, strategy):
+    output = quality_playlist_path(source, directory, strategy)
+    if source.stem.startswith(("G_", "P_")) and directory.is_dir():
+        existing = [
+            path for path in directory.iterdir()
+            if path.suffix.lower() in (".m3u", ".m3u8")
+            and path.stem.replace("%2E", ".") == output.stem.replace("%2E", ".")
+        ]
+    else:
+        existing = [output] if output.exists() else []
+    if len(existing) > 1:
+        raise ui.UserError(
+            "Ambiguous quality playlists for the same source: "
+            + ", ".join(str(path) for path in existing)
+        )
+    if existing and existing[0].suffix != output.suffix:
+        raise ui.UserError(f"Conflicting quality playlist extension: {existing[0]}")
+    return existing[0] if existing else output
 
 
 def quality(item):
@@ -243,10 +272,7 @@ class QualityPlaylistPlugin(BeetsPlugin):
             raise ui.UserError("Quality must be LOSSY or LOSSLESS")
         source = self._playlists(opts.diff)[0]
         directory = Path(config["playlist"]["playlist_dir"].as_filename())
-        output = quality_playlist_path(source, directory, strategy)
-        legacy = directory / f"{source.stem}.quality-{strategy.lower()}{source.suffix}"
-        if not output.is_file() and legacy != output and legacy.is_file():
-            output = legacy
+        output = existing_quality_playlist_path(source, directory, strategy)
         if not output.is_file() or not self._generated(output):
             raise ui.UserError(f"Quality playlist not found: {output}")
         originals = self._entries(source)
@@ -599,14 +625,7 @@ class QualityPlaylistPlugin(BeetsPlugin):
         directory = Path(config["playlist"]["playlist_dir"].as_filename())
         try:
             for source in sources:
-                output = quality_playlist_path(source, directory, strategy)
-                legacy = directory / f"{source.stem}.quality-{strategy.lower()}{source.suffix}"
-                if legacy != output and legacy.exists():
-                    self._log.warning(
-                        "Old quality playlist has an incompatible Synology filename: {}. "
-                        "Move or remove it after verifying the new playlist: {}",
-                        legacy, output,
-                    )
+                output = existing_quality_playlist_path(source, directory, strategy)
                 if Path(cache.path).resolve() in {
                     source.resolve(), output.resolve(), Path(syspath(lib.path)).resolve()
                 }:
