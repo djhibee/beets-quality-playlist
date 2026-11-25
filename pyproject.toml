@@ -12,7 +12,7 @@ license = "MIT"
 dependencies = [
     "beets>=2.14.1",
     "beets-similarity @ https://github.com/djhibee/beets-similarity/archive/refs/tags/v1.2.0.zip",
-    "beets-userrating @ https://github.com/djhibee/beets-userrating/archive/refs/tags/v1.2.0.zip",
+    "beets-userrating @ https://github.com/djhibee/beets-userrating/archive/refs/tags/v1.3.0.zip",
 ]
 
 [tool.setuptools.packages.find]
