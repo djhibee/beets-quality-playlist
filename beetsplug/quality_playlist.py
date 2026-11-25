@@ -6,6 +6,7 @@ import os
 import re
 import tempfile
 from pathlib import Path
+from urllib.parse import quote, unquote
 
 from beets import config, plugins, ui
 from beets.dbcore.query import PathQuery
@@ -19,6 +20,42 @@ LOSSLESS_FORMATS = {
 }
 V0 = 300_000
 V2 = 225_000
+
+
+def quality_playlist_path(source, directory, strategy):
+    stem = source.stem
+    suffix = f".quality-{strategy.lower()}"
+    if stem.startswith(("G_", "P_")):
+        parts = stem.split("_", 2)
+        if (
+            len(parts) != 3
+            or (
+                not (parts[0] == "G" and not parts[1])
+                and not re.fullmatch(r"[A-Za-z0-9-]{1,8}", parts[1])
+            )
+        ):
+            raise ui.UserError(f"Invalid Synology playlist filename: {source}")
+        encoded = parts[2]
+        try:
+            name = unquote(encoded, encoding="utf-8", errors="strict")
+        except UnicodeError:
+            raise ui.UserError(f"Invalid encoded Synology playlist name: {source}") from None
+
+        def encode_name(value):
+            result = quote(value, safe="-_ ").replace(".", "%2E")
+            result = result.rstrip(" ") + "%20" * (len(result) - len(result.rstrip(" ")))
+            if result.startswith(("G_", "P_")):
+                result = f"%{ord(result[0]):02X}" + result[1:]
+            return result
+
+        if not name or encode_name(name) != encoded:
+            raise ui.UserError(f"Invalid encoded Synology playlist name: {source}")
+        stem = f"{parts[0]}_{parts[1]}_{encode_name(name + suffix)}"
+        if len(os.fsencode(stem + source.suffix)) > 255:
+            raise ui.UserError(f"Encoded quality playlist filename exceeds 255 bytes: {source}")
+    else:
+        stem += suffix
+    return directory / (stem + source.suffix)
 
 
 def quality(item):
@@ -206,7 +243,10 @@ class QualityPlaylistPlugin(BeetsPlugin):
             raise ui.UserError("Quality must be LOSSY or LOSSLESS")
         source = self._playlists(opts.diff)[0]
         directory = Path(config["playlist"]["playlist_dir"].as_filename())
-        output = directory / f"{source.stem}.quality-{strategy.lower()}{source.suffix}"
+        output = quality_playlist_path(source, directory, strategy)
+        legacy = directory / f"{source.stem}.quality-{strategy.lower()}{source.suffix}"
+        if not output.is_file() and legacy != output and legacy.is_file():
+            output = legacy
         if not output.is_file() or not self._generated(output):
             raise ui.UserError(f"Quality playlist not found: {output}")
         originals = self._entries(source)
@@ -559,7 +599,14 @@ class QualityPlaylistPlugin(BeetsPlugin):
         directory = Path(config["playlist"]["playlist_dir"].as_filename())
         try:
             for source in sources:
-                output = directory / f"{source.stem}.quality-{strategy.lower()}{source.suffix}"
+                output = quality_playlist_path(source, directory, strategy)
+                legacy = directory / f"{source.stem}.quality-{strategy.lower()}{source.suffix}"
+                if legacy != output and legacy.exists():
+                    self._log.warning(
+                        "Old quality playlist has an incompatible Synology filename: {}. "
+                        "Move or remove it after verifying the new playlist: {}",
+                        legacy, output,
+                    )
                 if Path(cache.path).resolve() in {
                     source.resolve(), output.resolve(), Path(syspath(lib.path)).resolve()
                 }:

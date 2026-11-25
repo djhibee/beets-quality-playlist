@@ -101,6 +101,16 @@ Generated files contain a marker so they never become input playlists;
 subsequent calls regenerate them. Reference files are never overwritten, and
 an unmarked file occupying the output name is rejected.
 
+For Synology-style reference names (`G_<alias>_<name>` or
+`P_<alias>_<name>`), the quality suffix is percent-encoded as part of the
+playlist name. For example, `G__5-stars.m3u` produces
+`G__5-stars%2Equality-lossless.m3u`, compatible with beets-synologysync.
+The reference name must already use its canonical encoding and a valid owner
+alias. Existing generated files with the old unencoded suffix are not deleted:
+after checking the newly generated playlist, move or remove the old file from
+`playlist_dir` so that beets-synologysync can validate the directory. `--diff`
+can still read the old file if the new one has not yet been generated.
+
 Paths use the official plugin's `relative_to`, `playlist_dir`, and
 `forward_slash` configuration. Ordering, duplicates, comments, and entries
 not found in the library are preserved. Unknown entries are logged.
