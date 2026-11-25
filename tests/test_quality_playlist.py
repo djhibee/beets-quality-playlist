@@ -18,6 +18,7 @@ from beetsplug.quality_playlist import (
     describe_quality,
     QualityPlaylistPlugin,
     quality,
+    quality_playlist_path,
 )
 
 
@@ -252,6 +253,100 @@ class QualityPlaylistTest(unittest.TestCase):
         self.command("--quiet")
         self.assertFalse(list(self.root.glob("*quality-lossless.quality-*")))
         self.assertFalse((self.root / "choices.json").exists())
+
+    def test_synology_names_encode_quality_suffix_and_diff(self):
+        for stem, strategy, expected in (
+            ("G__5-stars", "LOSSLESS", "G__5-stars.quality-lossless.m3u"),
+            ("P_alice_Caf%C3%A9%2Emix", "LOSSY",
+             "P_alice_Caf%C3%A9.mix.quality-lossy.m3u"),
+            ("G_alice_%47_mix%252F", "LOSSLESS",
+             "G_alice_%47_mix%252F.quality-lossless.m3u"),
+            ("G__trailing%20", "LOSSLESS",
+             "G__trailing .quality-lossless.m3u"),
+        ):
+            with self.subTest(stem=stem, strategy=strategy):
+                source = self.root / (stem + ".m3u")
+                source.write_bytes(b"original.mp3\n")
+                self.command("-p", str(source), "-q", strategy, "--quiet")
+                output = self.root / expected
+                self.assertIn(MARKER + strategy.encode(), output.read_bytes())
+                with patch.object(ui, "print_") as printed:
+                    self.command("--diff", str(source), "-q", strategy)
+                self.assertTrue(printed.called)
+                self.command("-p", str(source), "-q", strategy, "--quiet")
+
+    def test_synology_legacy_output_warns_and_is_preserved(self):
+        source = self.root / "G__5-stars.m3u"
+        source.write_bytes(b"original.mp3\n")
+        legacy = self.root / "G__5-stars%2Equality-lossless.m3u"
+        legacy.write_bytes(MARKER + b"LOSSLESS\noriginal.mp3\n")
+        with patch.object(ui, "print_") as printed:
+            self.command("--diff", str(source))
+        self.assertTrue(printed.called)
+        self.command("-p", str(source), "--quiet")
+        self.assertIn(b"lossless.flac\n", legacy.read_bytes())
+        self.assertFalse((self.root / "G__5-stars.quality-lossless.m3u").exists())
+        with patch.object(ui, "print_") as printed:
+            self.command("--diff", str(source))
+        self.assertIn("0 of 1 songs", str(printed.call_args_list[-1]))
+
+    def test_invalid_synology_reference_is_not_written(self):
+        for stem in ("P__name", "P_owner_%ZZ", "G_bob_%FF"):
+            with self.subTest(stem=stem):
+                source = self.root / (stem + ".m3u")
+                source.write_bytes(b"original.mp3\n")
+                with self.assertRaisesRegex(ui.UserError, "Synology playlist"):
+                    self.command("-p", str(source), "--quiet")
+                self.assertEqual(source.read_bytes(), b"original.mp3\n")
+
+    def test_synology_output_refuses_to_overwrite_unmarked_file(self):
+        source = self.root / "G__5-stars.m3u"
+        source.write_bytes(b"original.mp3\n")
+        output = self.root / "G__5-stars.quality-lossless.m3u"
+        output.write_bytes(b"unrelated.mp3\n")
+        with self.assertRaisesRegex(ui.UserError, "Refusing to overwrite"):
+            self.command("-p", str(source), "--quiet")
+        self.assertEqual(output.read_bytes(), b"unrelated.mp3\n")
+
+    def test_synology_encoded_output_respects_filename_limit(self):
+        source = self.root / ("G__" + "a" * 231 + ".m3u")
+        output = quality_playlist_path(source, self.root, "LOSSLESS")
+        self.assertEqual(len(output.name.encode()), 255)
+        source = self.root / ("G__" + "a" * 232 + ".m3u")
+        with self.assertRaisesRegex(ui.UserError, "exceeds 255 bytes"):
+            quality_playlist_path(source, self.root, "LOSSLESS")
+
+    def test_synology_duplicate_output_spellings_are_rejected(self):
+        source = self.root / "G__5-stars.m3u"
+        source.write_bytes(b"original.mp3\n")
+        readable = self.root / "G__5-stars.quality-lossless.m3u"
+        legacy = self.root / "G__5-stars%2Equality-lossless.m3u"
+        for path in (readable, legacy):
+            path.write_bytes(MARKER + b"LOSSLESS\noriginal.mp3\n")
+        for args in (("-p", str(source), "--quiet"), ("--diff", str(source))):
+            with self.subTest(args=args), self.assertRaisesRegex(
+                ui.UserError, "Ambiguous quality playlists"
+            ):
+                self.command(*args)
+        self.assertEqual(readable.read_bytes(), legacy.read_bytes())
+
+    def test_synology_mixed_dot_encodings_reuse_existing_file(self):
+        source = self.root / "P_alice_a%2Eb%2Ec.m3u"
+        source.write_bytes(b"original.mp3\n")
+        previous = self.root / "P_alice_a%2Eb.c%2Equality-lossless.m3u"
+        previous.write_bytes(MARKER + b"LOSSLESS\noriginal.mp3\n")
+        self.command("-p", str(source), "--quiet")
+        self.assertIn(b"lossless.flac\n", previous.read_bytes())
+        self.assertFalse((self.root / "P_alice_a.b.c.quality-lossless.m3u").exists())
+
+    def test_synology_different_output_extension_is_a_conflict(self):
+        source = self.root / "G__5-stars.m3u"
+        source.write_bytes(b"original.mp3\n")
+        previous = self.root / "G__5-stars%2Equality-lossless.m3u8"
+        previous.write_bytes(MARKER + b"LOSSLESS\noriginal.mp3\n")
+        with self.assertRaisesRegex(ui.UserError, "Conflicting quality playlist extension"):
+            self.command("-p", str(source), "--quiet")
+        self.assertEqual(previous.read_bytes(), MARKER + b"LOSSLESS\noriginal.mp3\n")
 
     def test_pretend_writes_neither_playlist_nor_choices(self):
         self.store.put(self.original.id, self.flac.id, 0.9)

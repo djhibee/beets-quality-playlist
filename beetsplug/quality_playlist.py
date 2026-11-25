@@ -6,6 +6,7 @@ import os
 import re
 import tempfile
 from pathlib import Path
+from urllib.parse import quote, unquote
 
 from beets import config, plugins, ui
 from beets.dbcore.query import PathQuery
@@ -19,6 +20,71 @@ LOSSLESS_FORMATS = {
 }
 V0 = 300_000
 V2 = 225_000
+
+
+def quality_playlist_path(source, directory, strategy):
+    stem = source.stem
+    suffix = f".quality-{strategy.lower()}"
+    if stem.startswith(("G_", "P_")):
+        parts = stem.split("_", 2)
+        if (
+            len(parts) != 3
+            or (
+                not (parts[0] == "G" and not parts[1])
+                and not re.fullmatch(r"[A-Za-z0-9-]{1,8}", parts[1])
+            )
+        ):
+            raise ui.UserError(f"Invalid Synology playlist filename: {source}")
+        encoded = parts[2]
+        try:
+            name = unquote(encoded, encoding="utf-8", errors="strict")
+        except UnicodeError:
+            raise ui.UserError(f"Invalid encoded Synology playlist name: {source}") from None
+
+        def encode_name(value):
+            result = quote(value, safe="-_ ")
+            trailing = result[len(result.rstrip(". ")):]
+            result = result.rstrip(". ") + "".join(
+                "%2E" if char == "." else "%20" for char in trailing
+            )
+            if result.startswith(("G_", "P_")):
+                result = f"%{ord(result[0]):02X}" + result[1:]
+            return result
+
+        canonical = encode_name(name)
+        trailing = re.search(r"(?:%2E|%20)+$", canonical)
+        if (
+            not name
+            or encoded.replace("%2E", ".") != canonical.replace("%2E", ".")
+            or trailing and not encoded.endswith(trailing.group())
+        ):
+            raise ui.UserError(f"Invalid encoded Synology playlist name: {source}")
+        stem = f"{parts[0]}_{parts[1]}_{encode_name(name + suffix)}"
+        if len(os.fsencode(stem + source.suffix)) > 255:
+            raise ui.UserError(f"Encoded quality playlist filename exceeds 255 bytes: {source}")
+    else:
+        stem += suffix
+    return directory / (stem + source.suffix)
+
+
+def existing_quality_playlist_path(source, directory, strategy):
+    output = quality_playlist_path(source, directory, strategy)
+    if source.stem.startswith(("G_", "P_")) and directory.is_dir():
+        existing = [
+            path for path in directory.iterdir()
+            if path.suffix.lower() in (".m3u", ".m3u8")
+            and path.stem.replace("%2E", ".") == output.stem.replace("%2E", ".")
+        ]
+    else:
+        existing = [output] if output.exists() else []
+    if len(existing) > 1:
+        raise ui.UserError(
+            "Ambiguous quality playlists for the same source: "
+            + ", ".join(str(path) for path in existing)
+        )
+    if existing and existing[0].suffix != output.suffix:
+        raise ui.UserError(f"Conflicting quality playlist extension: {existing[0]}")
+    return existing[0] if existing else output
 
 
 def quality(item):
@@ -206,7 +272,7 @@ class QualityPlaylistPlugin(BeetsPlugin):
             raise ui.UserError("Quality must be LOSSY or LOSSLESS")
         source = self._playlists(opts.diff)[0]
         directory = Path(config["playlist"]["playlist_dir"].as_filename())
-        output = directory / f"{source.stem}.quality-{strategy.lower()}{source.suffix}"
+        output = existing_quality_playlist_path(source, directory, strategy)
         if not output.is_file() or not self._generated(output):
             raise ui.UserError(f"Quality playlist not found: {output}")
         originals = self._entries(source)
@@ -559,7 +625,7 @@ class QualityPlaylistPlugin(BeetsPlugin):
         directory = Path(config["playlist"]["playlist_dir"].as_filename())
         try:
             for source in sources:
-                output = directory / f"{source.stem}.quality-{strategy.lower()}{source.suffix}"
+                output = existing_quality_playlist_path(source, directory, strategy)
                 if Path(cache.path).resolve() in {
                     source.resolve(), output.resolve(), Path(syspath(lib.path)).resolve()
                 }:

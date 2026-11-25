@@ -101,6 +101,14 @@ Generated files contain a marker so they never become input playlists;
 subsequent calls regenerate them. Reference files are never overwritten, and
 an unmarked file occupying the output name is rejected.
 
+For Synology-style reference names (`G_<alias>_<name>` or
+`P_<alias>_<name>`), internal dots remain readable. For example,
+`G__5-stars.m3u` produces `G__5-stars.quality-lossless.m3u`, compatible with
+the updated beets-synologysync. The reference must use a valid encoded name
+and owner alias. Older `%2E`-encoded filenames are supported and reused if
+present; if multiple spellings exist for the same output, the command reports
+the conflict rather than choosing one.
+
 Paths use the official plugin's `relative_to`, `playlist_dir`, and
 `forward_slash` configuration. Ordering, duplicates, comments, and entries
 not found in the library are preserved. Unknown entries are logged.
